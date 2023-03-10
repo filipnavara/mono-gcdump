@@ -64,10 +64,17 @@ namespace GCHeapster
                     children.Add(childNodeIndex);
                 }
 
-                memoryGraph.SetNode(nodeIndex, vtableIdToTypeIndex[referenceData.VTableID], (int)referenceData.ObjectSize, children);
+                if (!memoryGraph.IsDefined(nodeIndex))
+                {
+                    memoryGraph.SetNode(nodeIndex, vtableIdToTypeIndex[referenceData.VTableID], (int)referenceData.ObjectSize, children);
 
-                // FIXME: Find a way to report some more meaningful roots
-                rootBuilder.AddChild(nodeIndex);
+                    // FIXME: Find a way to report some more meaningful roots
+                    rootBuilder.AddChild(nodeIndex);
+                }
+                else
+                {
+                    Console.WriteLine($"Duplicate object ID: {referenceData.ObjectID:X}");
+                }
             }
 
             memoryGraph.RootIndex = rootBuilder.Build();
