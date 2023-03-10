@@ -3,6 +3,7 @@ using Microsoft.Diagnostics.Tracing;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 
 namespace GCHeapster
 {
@@ -11,7 +12,7 @@ namespace GCHeapster
         static void Main(string[] args)
         {
             string traceFile = args[0];
-            string outputFile = args[1];
+            string outputFile = args.Length == 1 ? Path.ChangeExtension(traceFile, "gcdump") : args[1];
 
             List<GCHeapDumpObjectReferenceData> referenceDatas = new List<GCHeapDumpObjectReferenceData>();
             MemoryGraph memoryGraph = new MemoryGraph(10000);
