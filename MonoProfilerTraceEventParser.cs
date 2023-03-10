@@ -214,7 +214,7 @@ namespace GCHeapster
         public uint GetReferencesOffset(int index) => (uint)GetInt32At(29 + 8 * index);
 
         // FIXME: 32-bit
-        public long GetReferencesObjectId(int index) => (uint)GetInt64At(29 + 4 + 8 * index);
+        public long GetReferencesObjectId(int index) => GetInt64At(29 + 4 + 8 * index);
 
         protected override void Dispatch()
         {
