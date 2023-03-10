@@ -21,6 +21,9 @@ namespace GCHeapster
             var source = new EventPipeEventSource(traceFile);
             var monoProfiler = new MonoProfilerTraceEventParser(source);
 
+            // FIXME: 32-bit
+            memoryGraph.Is64Bit = true;
+
             monoProfiler.MonoProfilerGCEvent += delegate (GCEventData data) { };
             monoProfiler.MonoProfilerGCHeapDumpStart += delegate (EmptyTraceData data) { };
             monoProfiler.MonoProfilerGCHeapDumpStop += delegate (EmptyTraceData data) { };
@@ -70,7 +73,7 @@ namespace GCHeapster
             memoryGraph.RootIndex = rootBuilder.Build();
             memoryGraph.AllowReading();
 
-            GCHeapDump.WriteMemoryGraph(memoryGraph, "test.gcdump", "Mono");
+            GCHeapDump.WriteMemoryGraph(memoryGraph, outputFile, "Mono");
         }
     }
 }
