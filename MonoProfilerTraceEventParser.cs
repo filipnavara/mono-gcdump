@@ -33,6 +33,48 @@ namespace GCHeapster
             }
         }
 
+        public event Action<GCRootRegisterData> MonoProfilerGCRootRegister
+        {
+            add
+            {
+                // action, eventid, taskid, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName
+                source.RegisterEventTemplate(new GCRootRegisterData(value, 48, 1, "MonoProfiler", MonoProfilerTaskGuid, 65, "GCRootRegister", ProviderGuid, ProviderName));
+            }
+            remove
+            {
+                source.UnregisterEventTemplate(value, 48, ProviderGuid);
+                source.UnregisterEventTemplate(value, 65, MonoProfilerTaskGuid);
+            }
+        }
+
+        public event Action<GCRootUnregisterData> MonoProfilerGCRootUnregister
+        {
+            add
+            {
+                // action, eventid, taskid, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName
+                source.RegisterEventTemplate(new GCRootUnregisterData(value, 49, 1, "MonoProfiler", MonoProfilerTaskGuid, 66, "GCRootUnregister", ProviderGuid, ProviderName));
+            }
+            remove
+            {
+                source.UnregisterEventTemplate(value, 49, ProviderGuid);
+                source.UnregisterEventTemplate(value, 66, MonoProfilerTaskGuid);
+            }
+        }
+
+        public event Action<GCRootsData> MonoProfilerGCRoots
+        {
+            add
+            {
+                // action, eventid, taskid, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName
+                source.RegisterEventTemplate(new GCRootsData(value, 50, 1, "MonoProfiler", MonoProfilerTaskGuid, 67, "GCRootsData", ProviderGuid, ProviderName));
+            }
+            remove
+            {
+                source.UnregisterEventTemplate(value, 50, ProviderGuid);
+                source.UnregisterEventTemplate(value, 67, MonoProfilerTaskGuid);
+            }
+        }
+
         public event Action<EmptyTraceData> MonoProfilerGCHeapDumpStart {
             add
             {
@@ -86,6 +128,7 @@ namespace GCHeapster
         }
 
         private const TraceEventID GCEventID = (TraceEventID)38;
+        private const TraceEventID GCRoots = (TraceEventID)51;
         private const TraceEventID GCHeapDumpStart = (TraceEventID)51;
         private const TraceEventID GCHeapDumpStop = (TraceEventID)52;
         private const TraceEventID GCHeapDumpObjectReferenceID = (TraceEventID)53;
@@ -103,12 +146,15 @@ namespace GCHeapster
         {
             if (s_templates == null)
             {
-                var templates = new TraceEvent[5];
+                var templates = new TraceEvent[8];
                 templates[0] = new GCEventData(null, 38, 1, "MonoProfiler", MonoProfilerTaskGuid, 55, "GCEventData", ProviderGuid, ProviderName);
-                templates[1] = new EmptyTraceData(null, 51, 1, "MonoProfiler", MonoProfilerTaskGuid, 68, "GCHeapDumpStart", ProviderGuid, ProviderName);
-                templates[2] = new EmptyTraceData(null, 52, 1, "MonoProfiler", MonoProfilerTaskGuid, 69, "GCHeapDumpStop", ProviderGuid, ProviderName);
-                templates[3] = new GCHeapDumpObjectReferenceData(null, 53, 1, "MonoProfiler", MonoProfilerTaskGuid, 70, "MonoProfilerGCHeapDumpObjectReference", ProviderGuid, ProviderName);
-                templates[4] = new GCHeapDumpVTableClassReferenceData(null, 63, 1, "MonoProfiler", MonoProfilerTaskGuid, 80, "GCHeapDumpVTableClassReference", ProviderGuid, ProviderName);
+                templates[1] = new GCRootRegisterData(null, 48, 1, "MonoProfiler", MonoProfilerTaskGuid, 65, "GCRootRegister", ProviderGuid, ProviderName);
+                templates[2] = new GCRootUnregisterData(null, 49, 1, "MonoProfiler", MonoProfilerTaskGuid, 66, "GCRootUnregister", ProviderGuid, ProviderName);
+                templates[3] = new GCRootsData(null, 50, 1, "MonoProfiler", MonoProfilerTaskGuid, 68, "GCRoots", ProviderGuid, ProviderName);
+                templates[4] = new EmptyTraceData(null, 51, 1, "MonoProfiler", MonoProfilerTaskGuid, 68, "GCHeapDumpStart", ProviderGuid, ProviderName);
+                templates[5] = new EmptyTraceData(null, 52, 1, "MonoProfiler", MonoProfilerTaskGuid, 69, "GCHeapDumpStop", ProviderGuid, ProviderName);
+                templates[6] = new GCHeapDumpObjectReferenceData(null, 53, 1, "MonoProfiler", MonoProfilerTaskGuid, 70, "MonoProfilerGCHeapDumpObjectReference", ProviderGuid, ProviderName);
+                templates[7] = new GCHeapDumpVTableClassReferenceData(null, 63, 1, "MonoProfiler", MonoProfilerTaskGuid, 80, "GCHeapDumpVTableClassReference", ProviderGuid, ProviderName);
                 s_templates = templates;
             }
             foreach (var template in s_templates)
@@ -190,6 +236,186 @@ namespace GCHeapster
         }
 
         private event Action<GCEventData> Action;
+    }
+
+    public sealed class GCRootRegisterData : TraceEvent
+    {
+        internal GCRootRegisterData(Action<GCRootRegisterData> action, int eventID, int task, string taskName, Guid taskGuid, int opcode, string opcodeName, Guid providerGuid, string providerName)
+            : base(eventID, task, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName)
+        {
+            Action = action;
+        }
+
+        public long RootID { get { return GetInt64At(0); } }
+
+        public long RootSize { get { return GetInt64At(8); } }
+
+        public int RootType { get { return GetByteAt(16); } }
+
+        public long RootKeyID { get { return GetInt64At(17); } }
+
+        public string RootKeyName { get { return GetUnicodeStringAt(25); } }
+
+        protected override void Dispatch()
+        {
+            Action(this);
+        }
+        protected override Delegate Target
+        {
+            get { return Action; }
+            set { Action = (Action<GCRootRegisterData>)value; }
+        }
+        protected override void Validate()
+        {
+        }
+
+        public override StringBuilder ToXml(StringBuilder sb)
+        {
+            Prefix(sb);
+            sb.Append("/>");
+            return sb;
+        }
+
+        public override string[] PayloadNames
+        {
+            get
+            {
+                if (payloadNames == null)
+                {
+                    payloadNames = new string[] { };
+                }
+
+                return payloadNames;
+            }
+        }
+
+        public override object PayloadValue(int index)
+        {
+            switch (index)
+            {
+                default:
+                    return null;
+            }
+        }
+
+        private event Action<GCRootRegisterData> Action;
+    }
+
+    public sealed class GCRootUnregisterData : TraceEvent
+    {
+        internal GCRootUnregisterData(Action<GCRootUnregisterData> action, int eventID, int task, string taskName, Guid taskGuid, int opcode, string opcodeName, Guid providerGuid, string providerName)
+            : base(eventID, task, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName)
+        {
+            Action = action;
+        }
+
+        public long RootID { get { return GetInt64At(0); } }
+
+        protected override void Dispatch()
+        {
+            Action(this);
+        }
+        protected override Delegate Target
+        {
+            get { return Action; }
+            set { Action = (Action<GCRootUnregisterData>)value; }
+        }
+        protected override void Validate()
+        {
+        }
+
+        public override StringBuilder ToXml(StringBuilder sb)
+        {
+            Prefix(sb);
+            sb.Append("/>");
+            return sb;
+        }
+
+        public override string[] PayloadNames
+        {
+            get
+            {
+                if (payloadNames == null)
+                {
+                    payloadNames = new string[] { };
+                }
+
+                return payloadNames;
+            }
+        }
+
+        public override object PayloadValue(int index)
+        {
+            switch (index)
+            {
+                default:
+                    return null;
+            }
+        }
+
+        private event Action<GCRootUnregisterData> Action;
+    }
+
+    public sealed class GCRootsData : TraceEvent
+    {
+        internal GCRootsData(Action<GCRootsData> action, int eventID, int task, string taskName, Guid taskGuid, int opcode, string opcodeName, Guid providerGuid, string providerName)
+            : base(eventID, task, taskName, taskGuid, opcode, opcodeName, providerGuid, providerName)
+        {
+            Action = action;
+        }
+
+        public int Count { get { return GetInt32At(0); } }
+
+        public long GetObjectID(int index) { return GetInt64At(16 * index + 4); }
+
+        public long GetAddressID(int index) { return GetInt64At(16 * index + 4 + 8); }
+
+        protected override void Dispatch()
+        {
+            Action(this);
+        }
+        protected override Delegate Target
+        {
+            get { return Action; }
+            set { Action = (Action<GCRootsData>)value; }
+        }
+        protected override void Validate()
+        {
+        }
+
+        public override StringBuilder ToXml(StringBuilder sb)
+        {
+            Prefix(sb);
+            XmlAttrib(sb, "Count", Count);
+            sb.Append("/>");
+            return sb;
+        }
+
+        public override string[] PayloadNames
+        {
+            get
+            {
+                if (payloadNames == null)
+                {
+                    payloadNames = new string[] { "Count" };
+                }
+
+                return payloadNames;
+            }
+        }
+
+        public override object PayloadValue(int index)
+        {
+            switch (index)
+            {
+                case 0:
+                    return Count;
+                default:
+                    return null;
+            }
+        }
+
+        private event Action<GCRootsData> Action;
     }
 
     public sealed class GCHeapDumpObjectReferenceData : TraceEvent

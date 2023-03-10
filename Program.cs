@@ -2,7 +2,6 @@
 using Microsoft.Diagnostics.Tracing;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 
 namespace GCHeapster
@@ -31,6 +30,33 @@ namespace GCHeapster
             monoProfiler.MonoProfilerGCHeapDumpObjectReferenceData += delegate (GCHeapDumpObjectReferenceData data)
             {
                 referenceDatas.Add((GCHeapDumpObjectReferenceData)data.Clone());
+            };
+
+            monoProfiler.MonoProfilerGCRootRegister += delegate (GCRootRegisterData data)
+            {
+
+            };
+
+            monoProfiler.MonoProfilerGCRootUnregister += delegate (GCRootUnregisterData data)
+            {
+
+            };
+
+            monoProfiler.MonoProfilerGCRoots += delegate (GCRootsData data)
+            {
+                for (int i = 0; i < data.Count; i++)
+                {
+                    var objectId = data.GetObjectID(i);
+                    var addressId = data.GetAddressID(i);
+
+                    if (!objectIdToNodeIndex.TryGetValue(objectId, out var nodeIndex))
+                    {
+                        nodeIndex = memoryGraph.CreateNode();
+                        objectIdToNodeIndex.Add(objectId, nodeIndex);
+                    }
+
+                    rootBuilder.AddChild(nodeIndex);
+                }
             };
 
             monoProfiler.MonoProfilerGCHeapDumpVTableClassReference += delegate (GCHeapDumpVTableClassReferenceData data)
@@ -69,7 +95,7 @@ namespace GCHeapster
                     memoryGraph.SetNode(nodeIndex, vtableIdToTypeIndex[referenceData.VTableID], (int)referenceData.ObjectSize, children);
 
                     // FIXME: Find a way to report some more meaningful roots
-                    rootBuilder.AddChild(nodeIndex);
+                    //rootBuilder.AddChild(nodeIndex);
                 }
                 else
                 {
