@@ -1,5 +1,6 @@
 ﻿using Graphs;
 using Microsoft.Diagnostics.Tracing;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -36,7 +37,7 @@ namespace GCHeapster
             {
                 if (!vtableIdToTypeIndex.TryGetValue(data.VTableID, out var typeIndex))
                 {
-                    typeIndex = memoryGraph.CreateType(data.ClassName);
+                    typeIndex = memoryGraph.CreateType(data.ClassName, "FakeModule");
                     vtableIdToTypeIndex[data.VTableID] = typeIndex;
                 }
             };
