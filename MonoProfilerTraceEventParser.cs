@@ -211,10 +211,10 @@ namespace GCHeapster
         public int Count { get { return GetInt32At(25); } }
 
         // FIXME: 32-bit
-        public uint GetReferencesOffset(int index) => (uint)GetInt32At(29 + 8 * index);
+        public uint GetReferencesOffset(int index) => (uint)GetInt32At(29 + 12 * index);
 
         // FIXME: 32-bit
-        public long GetReferencesObjectId(int index) => GetInt64At(29 + 4 + 8 * index);
+        public long GetReferencesObjectId(int index) => GetInt64At(29 + 4 + 12 * index);
 
         protected override void Dispatch()
         {

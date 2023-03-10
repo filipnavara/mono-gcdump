@@ -22,8 +22,7 @@ namespace GCHeapster
             var source = new EventPipeEventSource(traceFile);
             var monoProfiler = new MonoProfilerTraceEventParser(source);
 
-            // FIXME: 32-bit
-            memoryGraph.Is64Bit = true;
+            memoryGraph.Is64Bit = source.PointerSize == 8;
 
             monoProfiler.MonoProfilerGCEvent += delegate (GCEventData data) { };
             monoProfiler.MonoProfilerGCHeapDumpStart += delegate (EmptyTraceData data) { };
