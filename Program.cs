@@ -60,10 +60,9 @@ namespace GCHeapster
                         nodeIndex = memoryGraph.CreateNode();
                         objectIdToNodeIndex.Add(childObjectId, childNodeIndex);
                     }
-                    children[i] = childNodeIndex;
+                    children.Add(childNodeIndex);
                 }
 
-                Debug.WriteLine($"SetNode({referenceData.ObjectID})");
                 memoryGraph.SetNode(nodeIndex, vtableIdToTypeIndex[referenceData.VTableID], (int)referenceData.ObjectSize, children);
 
                 // FIXME: Find a way to report some more meaningful roots
