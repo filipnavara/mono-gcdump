@@ -57,7 +57,7 @@ namespace GCHeapster
                     var childObjectId = referenceData.GetReferencesObjectId(i);
                     if (!objectIdToNodeIndex.TryGetValue(childObjectId, out var childNodeIndex))
                     {
-                        nodeIndex = memoryGraph.CreateNode();
+                        childNodeIndex = memoryGraph.CreateNode();
                         objectIdToNodeIndex.Add(childObjectId, childNodeIndex);
                     }
                     children.Add(childNodeIndex);
