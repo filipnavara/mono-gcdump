@@ -1,86 +1,77 @@
-﻿using Graphs;
-using Microsoft.Diagnostics.Tracing;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using Microsoft.Diagnostics.Tracing;
 using System.IO;
+using System.CommandLine;
+using System;
+using Microsoft.Diagnostics.NETCore.Client;
+using System.Threading.Tasks;
 
-namespace GCHeapster
+#nullable enable
+
+namespace MonoGCDump
 {
     class Program
     {
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
-            string traceFile = args[0];
-            string outputFile = args.Length == 1 ? Path.ChangeExtension(traceFile, "gcdump") : args[1];
+            var inputFileNameArgument = new Argument<string>("input-filename", "The path to a nettrace file to be converted.");
+            var outputFileNameOption = new Option<string>(new[] { "-o", "--output" }, description: "Output filename.");
+            var processIdOption = new Option<int?>(new[] { "-p", "--process-id" }, "The process id to collect the gcdump from.");
+            var diagnosticPortOption = new Option<string?>(new[] { "--diagnostic-port" }, "The path to a diagnostic port to be used.");
+            var collectCommand = new Command("collect", "Collects a diagnostic trace from a currently running process") { processIdOption, diagnosticPortOption, outputFileNameOption };
+            var convertCommand = new Command("convert", "Convers existing nettrace file into gcdump file") { inputFileNameArgument, outputFileNameOption };
 
-            List<GCHeapDumpObjectReferenceData> referenceDatas = new List<GCHeapDumpObjectReferenceData>();
-            MemoryGraph memoryGraph = new MemoryGraph(10000);
-            var vtableIdToTypeIndex = new Dictionary<long, NodeTypeIndex>();
-            var objectIdToNodeIndex = new Dictionary<long, NodeIndex>();
-            var rootBuilder = new MemoryNodeBuilder(memoryGraph, "[.NET Roots]");
+            convertCommand.SetHandler(HandleConvert, inputFileNameArgument, outputFileNameOption);
+            collectCommand.SetHandler(HandleCollect, processIdOption, diagnosticPortOption, outputFileNameOption);
 
-            var source = new EventPipeEventSource(traceFile);
-            var monoProfiler = new MonoProfilerTraceEventParser(source);
+            return new RootCommand { convertCommand, collectCommand }.Invoke(args);
+        }
 
-            memoryGraph.Is64Bit = source.PointerSize == 8;
+        static async Task HandleConvert(string inputFileName, string? outputFileName)
+        {
+            outputFileName ??= Path.ChangeExtension(inputFileName, "gcdump");
+            var source = new EventPipeEventSource(inputFileName);
+            var memoryGraph = await MonoMemoryGraphBuilder.Build(source);
+            GCHeapDump.WriteMemoryGraph(memoryGraph, outputFileName, "Mono");
+            Console.WriteLine($"Converted {inputFileName} to {outputFileName}");
+        }
 
-            monoProfiler.MonoProfilerGCEvent += delegate (GCEventData data) { };
-            monoProfiler.MonoProfilerGCHeapDumpStart += delegate (EmptyTraceData data) { };
-            monoProfiler.MonoProfilerGCHeapDumpStop += delegate (EmptyTraceData data) { };
-            monoProfiler.MonoProfilerGCHeapDumpObjectReferenceData += delegate (GCHeapDumpObjectReferenceData data)
+        static async Task HandleCollect(int? processId, string? diagnosticPort, string? outputFileName)
+        {
+            if (processId is null && diagnosticPort is null)
             {
-                referenceDatas.Add((GCHeapDumpObjectReferenceData)data.Clone());
-            };
-
-            monoProfiler.MonoProfilerGCHeapDumpVTableClassReference += delegate (GCHeapDumpVTableClassReferenceData data)
-            {
-                if (!vtableIdToTypeIndex.TryGetValue(data.VTableID, out var typeIndex))
-                {
-                    typeIndex = memoryGraph.CreateType(data.ClassName, "FakeModule");
-                    vtableIdToTypeIndex[data.VTableID] = typeIndex;
-                }
-            };
-
-            source.Process();
-
-            foreach (var referenceData in referenceDatas)
-            {
-                if (!objectIdToNodeIndex.TryGetValue(referenceData.ObjectID, out var nodeIndex))
-                {
-                    nodeIndex = memoryGraph.CreateNode();
-                    objectIdToNodeIndex.Add(referenceData.ObjectID, nodeIndex);
-                }
-
-                var children = new GrowableArray<NodeIndex>(referenceData.Count);
-                for (int i = 0; i < referenceData.Count; i++)
-                {
-                    var childObjectId = referenceData.GetReferencesObjectId(i);
-                    if (!objectIdToNodeIndex.TryGetValue(childObjectId, out var childNodeIndex))
-                    {
-                        childNodeIndex = memoryGraph.CreateNode();
-                        objectIdToNodeIndex.Add(childObjectId, childNodeIndex);
-                    }
-                    children.Add(childNodeIndex);
-                }
-
-                if (!memoryGraph.IsDefined(nodeIndex))
-                {
-                    memoryGraph.SetNode(nodeIndex, vtableIdToTypeIndex[referenceData.VTableID], (int)referenceData.ObjectSize, children);
-
-                    // FIXME: Find a way to report some more meaningful roots
-                    rootBuilder.AddChild(nodeIndex);
-                }
-                else
-                {
-                    Console.WriteLine($"Duplicate object ID: {referenceData.ObjectID:X}");
-                }
+                Console.WriteLine("Either a process id or a diagnostic port must be specified.");
+                return;
             }
 
-            memoryGraph.RootIndex = rootBuilder.Build();
-            memoryGraph.AllowReading();
+            outputFileName ??= DateTime.UtcNow.ToString("yyyyMMdd'_'HHssmm'.gcdump'");
 
-            GCHeapDump.WriteMemoryGraph(memoryGraph, outputFile, "Mono");
+            DiagnosticsClient diagnosticsClient;
+
+            if (processId is not null)
+            {
+                diagnosticsClient = new DiagnosticsClient(processId.Value);
+            }
+            else
+            {
+                if (!IpcEndpointConfig.TryParse(diagnosticPort, out var config))
+                {
+                    Console.WriteLine("Invalid diagnostic port.");
+                    return;
+                }
+                diagnosticsClient = new DiagnosticsClient(config);
+            }
+
+            var eventPipeSession = diagnosticsClient.StartEventPipeSession(
+                new EventPipeProvider("Microsoft-DotNETRuntimeMonoProfiler", System.Diagnostics.Tracing.EventLevel.Informational, 0xC900003),
+                requestRundown: true,
+                circularBufferMB: 1024);
+            var source = new EventPipeEventSource(eventPipeSession.EventStream);
+            var gcDumpFinished = new TaskCompletionSource();
+            var buildTask = MonoMemoryGraphBuilder.Build(source, () => { gcDumpFinished.SetResult(); });
+            await gcDumpFinished.Task;
+            await eventPipeSession.StopAsync(default);
+            var memoryGraph = await buildTask;
+            GCHeapDump.WriteMemoryGraph(memoryGraph, outputFileName, "Mono");
         }
     }
 }
