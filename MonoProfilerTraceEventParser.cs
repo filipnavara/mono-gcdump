@@ -2,7 +2,7 @@
 using System.Text;
 using Microsoft.Diagnostics.Tracing;
 
-namespace GCHeapster
+namespace MonoGCDump
 {
     public sealed class MonoProfilerTraceEventParser : TraceEventParser
     {
