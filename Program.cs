@@ -18,7 +18,7 @@ namespace MonoGCDump
             var processIdOption = new Option<int?>(new[] { "-p", "--process-id" }, "The process id to collect the gcdump from.");
             var diagnosticPortOption = new Option<string?>(new[] { "--diagnostic-port" }, "The path to a diagnostic port to be used.");
             var collectCommand = new Command("collect", "Collects a diagnostic trace from a currently running process") { processIdOption, diagnosticPortOption, outputFileNameOption };
-            var convertCommand = new Command("convert", "Convers existing nettrace file into gcdump file") { inputFileNameArgument, outputFileNameOption };
+            var convertCommand = new Command("convert", "Converts existing nettrace file into gcdump file") { inputFileNameArgument, outputFileNameOption };
 
             convertCommand.SetHandler(HandleConvert, inputFileNameArgument, outputFileNameOption);
             collectCommand.SetHandler(HandleCollect, processIdOption, diagnosticPortOption, outputFileNameOption);
