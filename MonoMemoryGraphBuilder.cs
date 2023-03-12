@@ -3,6 +3,7 @@ using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers.Clr;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 #nullable enable
@@ -30,13 +31,11 @@ namespace MonoGCDump
             }
         }
 
-        public static async Task<MemoryGraph> Build(EventPipeEventSource source, Action? stop = null)
+        public static async Task<MemoryGraph> Build(EventPipeEventSource source, MonoGCRootRangeTracker? rootRangeTracker = null, Action? stop = null)
         {
             var moduleMap = new Dictionary<long, string>();
             var typeData = new List<GCTypeData>();
             var objectReferenceData = new List<GCObjectReferenceData>();
-            var rootRangeData = new List<GCRootRangeData>();
-            var rootRangeComparer = new GCRootRangeComparer();
             var rootData = new List<GCRootData>();
 
             var vtableIdToTypeIndex = new Dictionary<long, NodeTypeIndex>();
@@ -45,19 +44,22 @@ namespace MonoGCDump
             var monoProfiler = new MonoProfilerTraceEventParser(source);
             var clrRundown = new ClrRundownTraceEventParser(source);
 
+            TaskCompletionSource heapDumpStart = new TaskCompletionSource();
+
+            rootRangeTracker ??= new MonoGCRootRangeTracker();
+
+            rootRangeTracker.Attach(monoProfiler);
+
             clrRundown.LoaderModuleDCStop += delegate (ModuleLoadUnloadTraceData data)
             {
                 moduleMap[data.ModuleID] = data.ModuleILPath;
             };
 
-            monoProfiler.MonoProfilerGCEvent += delegate (GCEventData data) { };
-            monoProfiler.MonoProfilerGCHeapDumpStart += delegate (EmptyTraceData data) { };
-            monoProfiler.MonoProfilerGCHeapDumpStop += delegate (EmptyTraceData data)
-            {
-                stop?.Invoke();
-            };
+            monoProfiler.MonoProfilerGCHeapDumpStart += data => heapDumpStart.SetResult();
 
-            monoProfiler.MonoProfilerGCHeapDumpObjectReferenceData += delegate (GCHeapDumpObjectReferenceData data)
+            monoProfiler.MonoProfilerGCHeapDumpStop += data => stop?.Invoke();
+
+            monoProfiler.MonoProfilerGCHeapDumpObjectReferenceData += data =>
             {
                 long[] children;
                 if (data.Count > 0)
@@ -75,22 +77,6 @@ namespace MonoGCDump
                 objectReferenceData.Add(new GCObjectReferenceData(data.ObjectID, data.VTableID, (int)data.ObjectSize, children));
             };
 
-            monoProfiler.MonoProfilerGCRootRegister += delegate (GCRootRegisterData data)
-            {
-                // FIXME: Unique root names?
-                var rootRange = new GCRootRangeData(data.RootID, data.RootID + data.RootSize, data.RootKeyName);
-                int newIndex = rootRangeData.BinarySearch(rootRange, rootRangeComparer);
-                if (newIndex < 0)
-                {
-                    rootRangeData.Insert(~newIndex, rootRange);
-                }
-            };
-
-            monoProfiler.MonoProfilerGCRootUnregister += delegate (GCRootUnregisterData data)
-            {
-
-            };
-
             monoProfiler.MonoProfilerGCRoots += delegate (GCRootsData data)
             {
                 for (int i = 0; i < data.Count; i++)
@@ -104,10 +90,20 @@ namespace MonoGCDump
                 typeData.Add(new GCTypeData(data.VTableID, data.ClassName, data.ModuleID));
             };
 
-            await Task.Run(() => source.Process());
+            var processTask = Task.Run(() => source.Process());
+
+            if (await Task.WhenAny(heapDumpStart.Task, Task.Delay(5000)) != heapDumpStart.Task)
+            {
+                source.StopProcessing();
+                throw new TimeoutException("Heap dump didn't start within 5 seconds");
+            }
+
+            await processTask;
+
+            rootRangeTracker.Detach(monoProfiler);
 
             // TODO: Better estimate
-            var memoryGraph = new MemoryGraph(objectReferenceData.Count + rootRangeData.Count + 64);
+            var memoryGraph = new MemoryGraph(objectReferenceData.Count + 1024);
             memoryGraph.Is64Bit = source.PointerSize == 8;
             var rootBuilder = new MemoryNodeBuilder(memoryGraph, "[.NET Roots]");
 
@@ -173,7 +169,7 @@ namespace MonoGCDump
                     if (objectIdToNodeIndex.TryGetValue(root.ObjectId, out var nodeIndex))
                     {
                         // Find
-                        var rootRange = rootRangeData.Find(rootRange => root.AddressId >= rootRange.Start && root.AddressId < rootRange.End);
+                        var rootRange = rootRangeTracker.FindRootRange(root.AddressId);
                         rootBuilder.FindOrCreateChild(rootRange?.Name ?? "Other Roots").AddChild(nodeIndex);
                     }
                 }
