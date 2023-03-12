@@ -82,7 +82,7 @@ namespace MonoGCDump
 
                 int outputFileNameCounter = 1;
                 using var eventPipeLogSession = diagnosticsClient.StartEventPipeSession(
-                    new EventPipeProvider("Microsoft-DotNETRuntimeMonoProfiler", System.Diagnostics.Tracing.EventLevel.Informational, 0xC100003),
+                    new EventPipeProvider("Microsoft-DotNETRuntimeMonoProfiler", System.Diagnostics.Tracing.EventLevel.Informational, 0x4000000),
                     requestRundown: false,
                     circularBufferMB: 1024);
                 using var source = new EventPipeEventSource(eventPipeLogSession.EventStream);
