@@ -5,6 +5,7 @@ using System;
 using Microsoft.Diagnostics.NETCore.Client;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 #nullable enable
 
@@ -82,7 +83,10 @@ namespace MonoGCDump
 
                 int outputFileNameCounter = 1;
                 using var eventPipeLogSession = diagnosticsClient.StartEventPipeSession(
-                    new EventPipeProvider("Microsoft-DotNETRuntimeMonoProfiler", System.Diagnostics.Tracing.EventLevel.Informational, 0x4000000),
+                    new EventPipeProvider(
+                        "Microsoft-DotNETRuntimeMonoProfiler",
+                        System.Diagnostics.Tracing.EventLevel.Informational,
+                        0x4000000),
                     requestRundown: false,
                     circularBufferMB: 1024);
                 using var source = new EventPipeEventSource(eventPipeLogSession.EventStream);
@@ -144,7 +148,14 @@ namespace MonoGCDump
             MonoGCRootRangeTracker? rootRangeTracker = null)
         {
             using var eventPipeSession = diagnosticsClient.StartEventPipeSession(
-                new EventPipeProvider("Microsoft-DotNETRuntimeMonoProfiler", System.Diagnostics.Tracing.EventLevel.Informational, 0xC900003),
+                new EventPipeProvider(
+                    "Microsoft-DotNETRuntimeMonoProfiler",
+                    System.Diagnostics.Tracing.EventLevel.Informational,
+                    0xC900003,
+                    new Dictionary<string, string>
+                    {
+                        { "heapcollect", "ondemand" }
+                    }),
                 requestRundown: true,
                 circularBufferMB: 1024);
             using var source = new EventPipeEventSource(eventPipeSession.EventStream);
