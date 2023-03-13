@@ -122,6 +122,7 @@ namespace MonoGCDump
                             try
                             {
                                 await CollectDump(diagnosticsClient, outputFileName1, rootRangeTracker);
+                                outputFileNameCounter++;
                             }
                             catch (Exception e)
                             {
