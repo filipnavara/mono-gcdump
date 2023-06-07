@@ -6,6 +6,7 @@ using Microsoft.Diagnostics.NETCore.Client;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 #nullable enable
 
@@ -72,7 +73,21 @@ namespace MonoGCDump
                     Console.WriteLine("Invalid diagnostic port.");
                     return;
                 }
-                diagnosticsClient = new DiagnosticsClient(config);
+
+                if (config.IsConnectConfig)
+                {
+                    diagnosticsClient = new DiagnosticsClient(config);
+                }
+                else
+                {
+                    string fullPort = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? config.Address : Path.GetFullPath(config.Address);
+                    ReversedDiagnosticsServer server = new(fullPort);
+                    server.Start();
+                    Console.WriteLine($"Waiting for connection on {fullPort}");
+                    Console.WriteLine($"Start an application with the following environment variable: DOTNET_DiagnosticPorts={fullPort}");
+                    IpcEndpointInfo endpointInfo = await server.AcceptAsync(default).ConfigureAwait(false);
+                    diagnosticsClient = new DiagnosticsClient(endpointInfo.Endpoint);
+                }
             }
 
             if (interactive == true)
