@@ -2,7 +2,9 @@
 
 ## Introduction
 
-The mono-gcdump tool is a close cousin to the [dotnet-gcdump tool](https://github.com/dotnet/diagnostics/blob/main/documentation/dotnet-gcdump-instructions.md). It produces .gcdump files from MonoVM processes that capture the managed heap state for analysis. The gcdump files can be viewed in Visual Studio, or [PerfView](https://github.com/microsoft/PerfView).
+The mono-gcdump tool is a close cousin to the [dotnet-gcdump tool](https://github.com/dotnet/diagnostics/blob/main/documentation/dotnet-gcdump-instructions.md). It produces .gcdump files from MonoVM processes that capture the managed heap state for analysis. The gcdump files can be viewed in Visual Studio, [PerfView](https://github.com/microsoft/PerfView), or [dotnet-heapview](https://github.com/1hub/dotnet-heapview).
+
+**NOTE: If you are using .NET 8 or newer, use the official dotnet-gcdump tool instead of mono-gcdump. The runtime was updated to support the same tooling available on other platforms.**
 
 ![Visual Studio displaying .gcdump file](README.png)
 
